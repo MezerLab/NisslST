@@ -1,8 +1,12 @@
 function mask = getMaskFromThreshMap(thresh_map)
 % This creates a brain mask
 mask = thresh_map;
+try
 mask = imbinarize(mask,'global');
-
+catch % If imbinarize does not exist in this versino of MATLAB
+    thresh = graythresh(mask);
+    mask = double(logical(mask>thresh));
+end
 % Erode and dilate the image to eliminate small noisy regions
 erode_dilate_num = 3;
 se = strel('disk',1);
@@ -26,4 +30,6 @@ mask = imerode(mask,strel('disk',2));
 
 % Fill holes
 mask = imfill(mask,'holes');
+
+mask = logical(mask);
 end

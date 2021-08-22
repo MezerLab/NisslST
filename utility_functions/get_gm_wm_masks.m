@@ -1,11 +1,17 @@
 function [gmMask, wmMask] = get_gm_wm_masks(cluster_pixel_size_map,mask)
-cluster_pixel_size_map(cluster_pixel_size_map>1000) = 0; % Remove outliers
+cluster_pixel_size_map(cluster_pixel_size_map>400) = 0; % Remove outliers
 gmMask = cluster_pixel_size_map(:,:,end).*mask;
 tmp = gmMask(gmMask>0);
 % Find threshol to separte GM from WM
 bins_centers = [1:254]+0.5;
 counts = hist(tmp(:),bins_centers);
-[gm_thresh,~] = otsuthresh(counts);
+try
+    [gm_thresh,~] = otsuthresh(counts);
+    catch % If MATLAB version is <2017b, otsuthresh will fail
+    tmp = tmp./max(tmp);
+	gm_thresh = graythresh(tmp);
+end
+
 gm_thresh = gm_thresh.*255;
 % Create a WM mask
 wmMask = zeros(size(gmMask));

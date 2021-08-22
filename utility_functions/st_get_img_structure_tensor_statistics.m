@@ -1,13 +1,14 @@
 
 %% Another version of this function, that takes as input a large image instead of a directory with subimages
 function [theta_mean_map, aniso_map, coherence_map, theta_peaks_map, peaks_height_map, theta_von_mises_map, component_fraction_map, thresh_map, mean_val_map] = st_get_img_structure_tensor_statistics(imFile,side_pix,rho,sigma,nPeaks,sample_near_cells,ds_factor,varargin)
-% imFile is the full path of an image file to be cropped into sub-images,rh
-% side_pix is the length of the sub-image to be cropped in pixels (should
-% be 155 for the AHB dataset, to get 50 mu sub-images)
-% rho is the radius(?) of the environment which is used for calculating the
-% local structure tensors. rho = 23 means 23*0.645 =~ 15 mu
+% st_get_img_structure_tensor_statistics performs Nissl-ST and returns
+% multiple outputs. See st_run_on_mediam_img for details on all outputs.
+%
+% If varargin>0, then this function also plots test plots to investigate
+% the output, including a polar histogram of the pixelwise orientations.
 
-% See if this is a special call to the funciton only to make plots for the methods section
+%%
+% See if this is a special call to the function only to make test plots 
 call_plot_version = false;
 if numel(varargin)>0
    call_plot_version = true; 
@@ -24,15 +25,9 @@ if length(size(im))==3 % im is rgb
 else
     im_gray = im;    
 end
-% im_gray  = imadjust(im_gray); % imadjust
-% im_gray  = histeq(im_gray); % histogram equalization
 im = im_gray;
 
-
-
-%### Roey End of testing contrast enhancement
 side_pix = side_pix-1; % The imcrop function adds 1 by default
-
 iSize = floor(size(im,2)/side_pix); % x axis is the 2nd dimension (columns)
 jSize = floor(size(im,1)/side_pix);
 
@@ -47,7 +42,7 @@ peaks_height_map = nan(iSize,jSize,nPeaks);
 theta_von_mises_map = nan(iSize,jSize,nPeaks);
 component_fraction_map = nan(iSize,jSize,nPeaks);
 
-if ds_factor~=1 % If required to downsample the sub-image, fix the rho parameter
+if ds_factor~=1 % If required to downsample the image tile fix the rho parameter
     rho = round(rho*ds_factor);
 end
 
@@ -62,15 +57,10 @@ for ii = 1:iSize
             continue
         end
 
-        % Denoise for abatlas &&&
-%         sub_img = BM3D(sub_img, 5);
-%         sub_img = sub_img./max(sub_img(:));
-
         % Downsample the sub-image, if required
         if ds_factor~=1
             sub_img = imresize(sub_img,ds_factor);
         end
-        
         
         % Extract structure tensor statistics
         if ~call_plot_version
@@ -79,7 +69,11 @@ for ii = 1:iSize
         else
             % For getting figures:
             % Name of this sub-figure
-            [~,fig_name] = fileparts(imFile);
+            try
+                [~,fig_name] = fileparts(imFile);
+            catch
+                fig_name = 'test';
+            end
             fig_name = sprintf([fig_name,'subidx_ii%g_jj%g_rho%g_sigma_%g_sample_near_cells%g'],ii,jj,rho,sigma,sample_near_cells);
             [theta_mean, aniso_mean, coherence, theta_vec, thresh, mean_val] = st_get_subimg_structure_tensor_statistics_figures_version(sub_img,rho,sigma,sample_near_cells,fig_name);
         end
@@ -112,20 +106,14 @@ for ii = 1:iSize
         thresh_map(ii,jj) = thresh;
         mean_val_map(ii,jj) = mean_val;
         
-        % Plot circular histogram
-        plot_circ_hist = false;
-        if plot_circ_hist | call_plot_version
-            figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_method/output_figures';
-            figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_method/parameter_figure/';
-%             figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_method/parameter_figure_bw/';
-
-            rho_sigma_str = sprintf('rho%g_sigma%g',rho,sigma);
-            %%
+        % Plot circular histogram (this requires MATLAB version 2016b and
+        % above)
+        if call_plot_version 
+            if exist('polarhistogram','builtin')
             figure('color','w')
             theta_plot = theta_vec(:);
             theta_plot = [theta_plot; theta_plot(theta_plot<0)+180; theta_plot(theta_plot>0)-180];
             theta_plot = theta_plot.*pi/180;
-%             circ_plot(theta_plot,'hist',[],60,true,true,'linewidth',2,'color','r')
             bins_num = 60;
             bins_edges = [0:3:360]./180*pi;
             h = polarhistogram(theta_plot,'BinEdges',bins_edges,'Normalization','count','linew',3);
@@ -140,21 +128,13 @@ for ii = 1:iSize
             hold all
             mu_deg = theta_peaks;
             rl = rlim;
-            set(gca,'rlim',[0,(310^2)/8]); % 310^2 is number of pixels in the image &&& CHange for different datasets
+            set(gca,'rlim',[0,prod(size(sib_img))/8]); % 310^2 is number of pixels in the image. Change this if using a different image tile size, or a different dataset.
             set(gca,'color','k')
             h.EdgeColor = 'w';
             h.FaceColor = 'w';
-            export_fig(gcf,fullfile(figDir,[fig_name,'_',rho_sigma_str,'_histogram_sample_near_cells.png']),'-dpng','-r300');
-        
-%             h.DisplayStyle = 'stairs'; % Or 'stairs' for unfilled histogram
-%             cmap = lines(8);
-%             h.EdgeColor = cmap(4,:); % 3 for grayscale, 4 for binary 
-%             export_fig(gcf,fullfile(figDir,[fig_name,'_',rho_sigma_str,'_histogram_stairs_count_sample_near_cells.png']),'-dpng','-r300');
-            close(gcf) %&&&DELETE ME if contiuing to add peaks later
-            continue
         
             % Add the peak orientations
-            for mI = 1:2
+            for mI = 1
                 if mI == 1;frmt = '-r';else;frmt = '--r'; end
                 hplt = polarplot([mu_deg(mI),mu_deg(mI)-180]*pi/180,[1,1].*rl(2),frmt,'linew',3)
                 % Get orientation RGB color
@@ -174,13 +154,9 @@ for ii = 1:iSize
                 export_fig(gcf,fullfile(figDir,[fig_name,'_',rho_sigma_str,'_histogram_peaks_',num2str(mI),'_black_sample_near_cells.png']),'-dpng','-r300');
             end
             %%
-            close gcf
-%             mu_deg = fittedVmm.mu*180/pi;
-%             [~,idx]= sort(fittedVmm.componentProportion,'descend');
-%             for mI = idx'
-%                 if mI == 1;frmt = '-k';else;frmt = '--k'; end
-%                 plot([0, cosd(mu_deg(mI))],[0, sind(mu_deg(mI))],frmt,'linew',2)
-%             end
+        else
+            warning('The function ''polarhistogram '' is required for plotting the polar histogram, but this version of MATLAB does not have it. Skipping plot')
+            end
         end
     end
 end
@@ -189,7 +165,8 @@ end
 
 %% Functions
 function [theta_peaks,pks_height] = find_peak_orientations(theta_vec,nPeaks)
-% Input is in [0 180], so we expand it below. % Convert to radians
+% Input is in [0 180], so we expand it below. 
+    % Convert to radians
     theta_vec = theta_vec/180*pi;
     % Apply ksdensity to smooth the histogram and find the optimal
     % smoothing kernel bandwidth

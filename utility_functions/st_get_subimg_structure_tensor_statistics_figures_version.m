@@ -1,4 +1,4 @@
-function [theta_mean, anisotropy_mean, coherence, theta_vec, thresh, mean_val] = st_get_subimg_structure_tensor_statistics(imFile,rho,sigma,sample_near_cells)
+function [theta_mean, anisotropy_mean, coherence, theta_vec, thresh, mean_val] = st_get_subimg_structure_tensor_statistics_figures_version(imFile,rho,sigma,sample_near_cells,fig_name)
 % Based on the code of this paper: https://www.math.univ-toulouse.fr/~weiss/Publis/Journals/2015/Structure_Tensor_Cell_Organization_Zhang_Weiss_2015.pdf
 % Code downloaded from: https://www.math.univ-toulouse.fr/~weiss/PageCodes.html
 % Path to code: /ems/elsc-labs/mezer-a/roey.schurr/CodeMatlab/functions_from_the_web/StructureTensor_toolbox
@@ -15,10 +15,27 @@ function [theta_mean, anisotropy_mean, coherence, theta_vec, thresh, mean_val] =
 % rho=23 for AHB data: 23*0.645 =~ 15 mu
 % rho=15 for abatlas data (15 mu): 15*0.97 =~ 15 mu
 
-binarize_and_fill_holes = false; % Binarize the image using Otshu threshold before calculating structure tensor, to avoid any effect of background staining
+binarize_and_fill_holes = false; % Binarize the image using Otsu threshold before calculating structure tensor, to avoid any effect of background staining
 
+
+% figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_method/output_figures/';
+% figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_method/parameter_figure/';
+% figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_method/parameter_figure_bw/';
+% figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_Review1/Binary_and_grayscale_images';
+% figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_Review1/Background_fibrous_staining/validation_composite_two_images';
+figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_Review1/Blood_vessels/output';
+figDir = '/ems/elsc-labs/mezer-a/Mezer-Lab/analysis/Histology/Figures_Review1/GM_WM_border/r3-1373/larger_sub_image/figures/tensors';
+
+if binarize_and_fill_holes
+    figDir = fullfile(figDir,'binary');
+else
+%     figDir = fullfile(figDir,'binary_grayscale');
+end
+if ~exist(figDir,'dir')
+    mkdir(figDir)
+end
 rand('seed',0); randn('state',0)
-test_plots = false; % Make some plots for testing
+test_plots = true; % Make some plots for testing
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if isstr(imFile) % Usually we actually give as input a single small image
     im = imread(imFile);
@@ -28,7 +45,17 @@ end
 if size(im,3)>1
     im = rgb2gray(im);
 end
+im_orig = im;
 im = 255-im;
+
+% Plot the image itself
+rho_sigma_str = sprintf('rho%g_sigma%g',rho,sigma);
+figure('color','k')
+imshow(im_orig)
+axis square
+% export_fig(gcf,fullfile(figDir,[fig_name,'_',rho_sigma_str,'.png']),'-dpng','-r300');
+% close gcf
+
 
 %% Get mean value in image
 mean_val = mean(im(:));
@@ -42,20 +69,24 @@ try
 catch % If MATLAB version is <2017b, otsuthresh will fail
 thresh = graythresh(im);
 end
-%% Fill holes
+
+%% Binarize and Fill holes
 if binarize_and_fill_holes
     im_bw = im2bw(im,thresh);
     im = imfill(im_bw,'holes');
+    rho_sigma_str = sprintf('rho%g_sigma%g',rho,sigma);
+    figure('color','k')
+    imshow(1-im)
+    axis square
+%     export_fig(gcf,fullfile(figDir,[fig_name,'_',rho_sigma_str,'_bw.png']),'-dpng','-r300');
+%     close gcf
 end
 
 %% Create sampling mask
 if sample_near_cells
-% This is the old version, only very close to cells. The new version is
-% close up to the std of the Gaussian kernel (rho) used for spatial
-% regularization
     mask = im2bw(im,thresh);
     mask = imfill(mask,'holes');
-%     mask = 1-mask;
+    %mask = 1-mask;
     mask = imdilate(mask,strel('disk',rho));
 else
     mask = ones(size(im));
@@ -66,10 +97,42 @@ mask = logical(mask);
 EigInfo = coherence_orientation_with_sigma(double(im),rho,sigma); 
 
 if test_plots
-    para.Step  =20; %%% intensity of orientation
-    para.scl   =10; %%% length of orientation
+  %%
+    para.Step = 45; %=30; %%% intensity of orientation
+    para.scl = 20; %%% length of orientation
+%     para.Step = 45*(0.645/0.46); % Rescale when using different datasets
+%     para.scl = 20*(0.645/0.46);
+
     ConvInfo.imconv = ones(size(im));
-    DisplayImage(im ,EigInfo,ConvInfo,para);
+    
+    % Plot tensors
+%     DisplayImage(im_orig ,EigInfo,ConvInfo,para);
+%     set(gca,'color','k')
+%     axis square
+%     export_fig(gcf,fullfile(figDir,[fig_name,'_',rho_sigma_str,'_tensores.png']),'-dpng','-r300');
+%     close gcf
+    
+    % Plot tensors close to the cells only
+    plot_near_cells = true;
+    para.Step = 35; %=30; %%% intensity of orientation
+    para.scl = 10; %%% length of orientation
+
+    DisplayImage_withMaskFlag(im_orig ,EigInfo,ConvInfo,para,plot_near_cells);
+    set(gca,'color','k')
+    axis square
+%     export_fig(gcf,fullfile(figDir,[fig_name,'_',rho_sigma_str,'_tensores_near_cells.png']),'-dpng','-r300');
+%     close gcf
+    
+    % Plot tensors on black and white image
+    if binarize_and_fill_holes
+    plot_near_cells = true;
+    DisplayImage(1-im,EigInfo,ConvInfo,para,plot_near_cells);
+    set(gca,'color','k')
+    axis square
+%     export_fig(gcf,fullfile(figDir,[fig_name,'_',rho_sigma_str,'_tensores_bw.png']),'-dpng','-r300');
+%     close gcf
+    end
+
 end
 
 %% Calculate coherence of the 1st eigenvector, as a measure of anisotropy over the entire sub-image
@@ -118,7 +181,7 @@ end
 theta_mean = round(theta_mean); % A score over the 180 colormap values
 
 %% Calculate the mean anisotropy (aniso is local, for each tensor)
-aniso = sqrt(EigInfo.nu1./EigInfo.nu2);
+aniso = sqrt(EigInfo.nu1./EigInfo.nu2); % See Budde and Frank for an alternative definition: (lambda1-lambda2)/(lambda1+lambda2)
 aniso = apply_mask(aniso,mask);
 anisotropy_mean = mean(aniso);
 
