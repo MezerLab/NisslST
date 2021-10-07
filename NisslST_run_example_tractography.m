@@ -1,7 +1,7 @@
 clear; clc
 
 %% User settings
-nissl_st_dir = 'C:\Users\roey\Documents\MezerLab\Glia_orientation_paper\Code_for_github\NisslST-main';%'ADD/CODE/TO/THE/NisslST/DIRECTORY';
+nissl_st_dir = 'ADD/CODE/TO/THE/NisslST/DIRECTORY';
 addpath(genpath(nissl_st_dir));
 output_dir = fullfile(nissl_st_dir,'output');
 tractography_dir = fullfile(output_dir,'tractography');
@@ -19,7 +19,7 @@ sigma = 3; % Gaussian kernel for smoothing the image before calculating Nissl-ST
 nPeaks = 2; % Number of peak orientations to extract. In fact, we typically just take the first peak.
 sample_near_cells = true; % Only extract orientations as close as 'rho' to cells (to avoid measuring empty spaces)
 
-st_stats_file = fullfile(output_dir,sprintf('112360908half_st_stats_side_%gmu_rho%g_sigma%g_npeaks%g_samplenearcells_%g_slicethresh_ds%g.mat',side_microns,rho,sigma,nPeaks,sample_near_cells,ds_factor));
+st_stats_file = fullfile(output_dir,sprintf('st_stats_side_%gmu_rho%g_sigma%g_npeaks%g_samplenearcells_%g_slicethresh_ds%g.mat',side_microns,rho,sigma,nPeaks,sample_near_cells,ds_factor));
 if ~exist(st_stats_file,'file')
     error('File does not exist. Run the NisslST_run_exampl.m first')
 end
